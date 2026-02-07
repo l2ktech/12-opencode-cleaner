@@ -137,6 +137,18 @@ systemctl --user status oc-cleaner.timer --no-pager
 systemctl --user list-timers --all | grep oc-cleaner
 ```
 
+## 快速验证 `watch`（v0.2.0）
+
+如果你只想快速确认“内存超阈值仅提醒”功能，直接执行：
+
+```bash
+git clone https://github.com/l2ktech/12-opencode-cleaner.git
+cd 12-opencode-cleaner
+git checkout v0.2.0
+go build -o oc-cleaner ./cmd/oc-cleaner
+./oc-cleaner watch --warn-mem-mb 1024 --once
+```
+
 ## 默认安全策略
 
 候选进程需要同时满足：
