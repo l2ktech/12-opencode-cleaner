@@ -12,6 +12,12 @@
   - Linux：`systemd --user timer`
 - `service status / uninstall`：查看状态或卸载
 
+## 设计原则（保持简单稳定）
+
+- 只清理“疑似孤儿且空闲”的 `opencode` 进程，不重启前台正在使用的会话。
+- 默认不做“超内存自动重启会话”这类高侵入动作，避免打断正在进行的工作。
+- 通过短间隔定时扫描，实现接近实时的后台维护。
+
 ## 安装
 
 ### 方式 1：从源码构建（推荐）
@@ -69,13 +75,26 @@ go run ./cmd/oc-cleaner scan --min-age-min 10
 ./oc-cleaner service status
 ```
 
+建议额外开启 lingering（使用户退出登录后仍可运行 user service）：
+
+```bash
+sudo loginctl enable-linger "$USER"
+loginctl show-user "$USER" | grep Linger
+```
+
+查看定时器触发计划：
+
+```bash
+systemctl --user list-timers --all | grep oc-cleaner
+```
+
 卸载：
 
 ```bash
 ./oc-cleaner service uninstall
 ```
 
-> 提示：Linux 使用 `systemd --user`，需确保当前用户会话支持 user services。
+> 提示：Linux 使用 `systemd --user`。若未开启 lingering，通常需要用户登录会话存在，定时器才会持续运行。
 
 ## 在其他设备快速部署
 
@@ -89,6 +108,19 @@ go build -o oc-cleaner ./cmd/oc-cleaner
 ./oc-cleaner service status
 ```
 
+如果你希望“后台持续运行 + 开机后自动恢复”，建议再执行：
+
+```bash
+sudo loginctl enable-linger "$USER"
+```
+
+然后重启后验证：
+
+```bash
+systemctl --user status oc-cleaner.timer --no-pager
+systemctl --user list-timers --all | grep oc-cleaner
+```
+
 ## 默认安全策略
 
 候选进程需要同时满足：
@@ -99,3 +131,11 @@ go build -o oc-cleaner ./cmd/oc-cleaner
 4. 进程没有非 `127.0.0.1 / ::1` 的已建立 TCP 连接
 
 这可最大限度避免误杀正在使用中的前台会话。
+
+## 关于“高内存提醒”
+
+当前版本不自动重启高内存会话进程（避免中断工作流）。推荐做法：
+
+1. 用 `scan` 先观察状态
+2. 仅通过 `clean` 回收明确符合条件的孤儿进程
+3. 按需调小 `--interval-sec` 以提高巡检频率
