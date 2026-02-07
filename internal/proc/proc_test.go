@@ -35,3 +35,19 @@ func TestShouldCandidate(t *testing.T) {
 		t.Fatalf("存在非本地连接不应为候选")
 	}
 }
+
+func TestFilterHighMemory(t *testing.T) {
+	ps := []Process{
+		{PID: 1, RSSKB: 512 * 1024},
+		{PID: 2, RSSKB: 1024 * 1024},
+		{PID: 3, RSSKB: 2048 * 1024},
+	}
+
+	high := FilterHighMemory(ps, 1024)
+	if len(high) != 2 {
+		t.Fatalf("期望 2 个高内存进程, 实际 %d", len(high))
+	}
+	if high[0].PID != 2 || high[1].PID != 3 {
+		t.Fatalf("过滤结果顺序或内容不符合预期: %+v", high)
+	}
+}

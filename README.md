@@ -7,6 +7,7 @@
 
 - `scan`：扫描并输出候选进程
 - `clean`：温和清理候选（`SIGTERM`，可选延迟后 `SIGKILL`）
+- `watch`：内存阈值告警（仅提醒，不重启进程）
 - `service install`：安装自动清理服务
   - macOS：`launchd`
   - Linux：`systemd --user timer`
@@ -52,6 +53,21 @@ go run ./cmd/oc-cleaner scan --min-age-min 10
 # TERM 后 5 秒仍存活则 KILL
 ./oc-cleaner clean --min-age-min 10 --kill-after-sec 5
 ```
+
+### 3）内存阈值提醒（仅提醒）
+
+```bash
+# 单次检测：超出 1024MB 的进程会输出 WARN
+./oc-cleaner watch --warn-mem-mb 1024 --once
+
+# 持续监控：每 30 秒检测一次
+./oc-cleaner watch --warn-mem-mb 1024 --interval-sec 30
+
+# JSON 输出（便于接日志系统）
+./oc-cleaner watch --warn-mem-mb 1024 --once --json
+```
+
+> `watch` 不会发送 TERM/KILL，只做告警输出。
 
 ## 自动部署（macOS / Linux）
 

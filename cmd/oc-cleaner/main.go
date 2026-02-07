@@ -31,6 +31,8 @@ func run(args []string) error {
 		return runScan(args[1:])
 	case "clean":
 		return runClean(args[1:])
+	case "watch":
+		return runWatch(args[1:])
 	case "service":
 		return runService(args[1:])
 	default:
@@ -42,6 +44,7 @@ func usage() error {
 	fmt.Println(`oc-cleaner 用法:
   oc-cleaner scan [--min-age-min 10] [--json]
   oc-cleaner clean [--min-age-min 10] [--kill-after-sec 0]
+  oc-cleaner watch [--warn-mem-mb 1024] [--interval-sec 30] [--once]
   oc-cleaner service install [--interval-sec 120] [--min-age-min 10]
   oc-cleaner service uninstall
   oc-cleaner service status`)
@@ -69,7 +72,7 @@ func runScan(args []string) error {
 	}
 
 	fmt.Printf("总进程: %d, 可清理候选: %d\n", len(all), len(cands))
-	fmt.Printf("%-8s %-8s %-8s %-10s %-10s %s\n", "PID", "PPID", "TTY", "AGE_MIN", "NET", "COMMAND")
+	fmt.Printf("%-8s %-8s %-8s %-10s %-10s %-10s %s\n", "PID", "PPID", "TTY", "AGE_MIN", "NET", "RSS(MB)", "COMMAND")
 	for _, p := range all {
 		net := "-"
 		if p.NetCheck {
@@ -79,7 +82,8 @@ func runScan(args []string) error {
 				net = "NO"
 			}
 		}
-		fmt.Printf("%-8d %-8d %-8s %-10d %-10s %s\n", p.PID, p.PPID, p.TTY, p.AgeMin, net, p.Command)
+		rssMB := float64(p.RSSKB) / 1024.0
+		fmt.Printf("%-8d %-8d %-8s %-10d %-10s %-10.1f %s\n", p.PID, p.PPID, p.TTY, p.AgeMin, net, rssMB, p.Command)
 	}
 	return nil
 }
@@ -118,6 +122,65 @@ func runClean(args []string) error {
 	}
 
 	return nil
+}
+
+func runWatch(args []string) error {
+	fs := flag.NewFlagSet("watch", flag.ContinueOnError)
+	warnMemMB := fs.Int("warn-mem-mb", 1024, "内存告警阈值(MB，仅提醒不重启)")
+	intervalSec := fs.Int("interval-sec", 30, "轮询间隔秒")
+	once := fs.Bool("once", false, "仅检测一次")
+	jsonOut := fs.Bool("json", false, "JSON 输出")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *warnMemMB <= 0 {
+		return errors.New("warn-mem-mb 必须大于 0")
+	}
+	if *intervalSec <= 0 {
+		return errors.New("interval-sec 必须大于 0")
+	}
+
+	for {
+		all, _, err := proc.Scan(proc.ScanOptions{MinAgeMin: 0, ProtectNonLoopbackNet: false})
+		if err != nil {
+			return err
+		}
+		high := proc.FilterHighMemory(all, *warnMemMB)
+
+		if *jsonOut {
+			payload := map[string]any{
+				"time":          time.Now().Format(time.RFC3339),
+				"warn_mem_mb":   *warnMemMB,
+				"process_count": len(all),
+				"warn_count":    len(high),
+				"warnings":      high,
+			}
+			b, _ := json.MarshalIndent(payload, "", "  ")
+			fmt.Println(string(b))
+		} else {
+			printWatchResult(high, *warnMemMB)
+		}
+
+		if *once {
+			return nil
+		}
+		time.Sleep(time.Duration(*intervalSec) * time.Second)
+	}
+}
+
+func printWatchResult(high []proc.Process, warnMemMB int) {
+	now := time.Now().Format("2006-01-02 15:04:05")
+	if len(high) == 0 {
+		fmt.Printf("[%s] OK: 没有进程超过 %dMB\n", now, warnMemMB)
+		return
+	}
+
+	fmt.Printf("[%s] WARN: 发现 %d 个进程超过 %dMB（仅提醒，不重启）\n", now, len(high), warnMemMB)
+	fmt.Printf("%-8s %-8s %-8s %-10s %s\n", "PID", "PPID", "TTY", "RSS(MB)", "COMMAND")
+	for _, p := range high {
+		rssMB := float64(p.RSSKB) / 1024.0
+		fmt.Printf("%-8d %-8d %-8s %-10.1f %s\n", p.PID, p.PPID, p.TTY, rssMB, p.Command)
+	}
 }
 
 func runService(args []string) error {

@@ -13,6 +13,7 @@ type Process struct {
 	PPID     int
 	TTY      string
 	ETime    string
+	RSSKB    int
 	Command  string
 	AgeMin   int
 	HasNet   bool
@@ -55,7 +56,7 @@ func Scan(opts ScanOptions) ([]Process, []Candidate, error) {
 }
 
 func listOpencodeProcesses() ([]Process, error) {
-	cmd := exec.Command("ps", "-axo", "pid=,ppid=,tty=,etime=,command=")
+	cmd := exec.Command("ps", "-axo", "pid=,ppid=,tty=,etime=,rss=,command=")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("执行 ps 失败: %w", err)
@@ -73,24 +74,26 @@ func listOpencodeProcesses() ([]Process, error) {
 		}
 
 		fields := strings.Fields(line)
-		if len(fields) < 5 {
+		if len(fields) < 6 {
 			continue
 		}
 
 		pid, err1 := strconv.Atoi(fields[0])
 		ppid, err2 := strconv.Atoi(fields[1])
-		if err1 != nil || err2 != nil {
+		rssKB, err3 := strconv.Atoi(fields[4])
+		if err1 != nil || err2 != nil || err3 != nil {
 			continue
 		}
 
 		etime := fields[3]
-		cmdline := strings.TrimSpace(strings.SplitN(line, etime, 2)[1])
+		cmdline := strings.Join(fields[5:], " ")
 
 		ret = append(ret, Process{
 			PID:     pid,
 			PPID:    ppid,
 			TTY:     fields[2],
 			ETime:   etime,
+			RSSKB:   rssKB,
 			Command: cmdline,
 		})
 	}
@@ -98,6 +101,20 @@ func listOpencodeProcesses() ([]Process, error) {
 		return nil, fmt.Errorf("读取 ps 输出失败: %w", err)
 	}
 	return ret, nil
+}
+
+func FilterHighMemory(processes []Process, warnMemMB int) []Process {
+	if warnMemMB <= 0 {
+		return nil
+	}
+	thresholdKB := warnMemMB * 1024
+	high := make([]Process, 0)
+	for _, p := range processes {
+		if p.RSSKB >= thresholdKB {
+			high = append(high, p)
+		}
+	}
+	return high
 }
 
 func isTargetCommand(line string) bool {
