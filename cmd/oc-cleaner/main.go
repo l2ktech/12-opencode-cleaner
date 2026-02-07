@@ -45,7 +45,7 @@ func usage() error {
   oc-cleaner scan [--min-age-min 10] [--json]
   oc-cleaner clean [--min-age-min 10] [--kill-after-sec 0]
   oc-cleaner watch [--warn-mem-mb 1024] [--interval-sec 30] [--once]
-  oc-cleaner service install [--interval-sec 120] [--min-age-min 10]
+  oc-cleaner service install [--interval-sec 120] [--min-age-min 10] [--watch-interval-sec 30] [--watch-warn-mem-mb 1024]
   oc-cleaner service uninstall
   oc-cleaner service status`)
 	return errors.New("参数不完整")
@@ -192,6 +192,8 @@ func runService(args []string) error {
 		fs := flag.NewFlagSet("service install", flag.ContinueOnError)
 		interval := fs.Int("interval-sec", 120, "扫描间隔秒")
 		minAge := fs.Int("min-age-min", 10, "最小存活分钟")
+		watchInterval := fs.Int("watch-interval-sec", 30, "watch 检查间隔秒")
+		watchWarnMB := fs.Int("watch-warn-mem-mb", 1024, "watch 内存告警阈值(MB)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -199,10 +201,16 @@ func runService(args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := service.Install(service.Config{IntervalSec: *interval, MinAgeMin: *minAge, BinPath: exe}); err != nil {
+		if err := service.Install(service.Config{
+			IntervalSec:      *interval,
+			MinAgeMin:        *minAge,
+			WatchIntervalSec: *watchInterval,
+			WarnMemMB:        *watchWarnMB,
+			BinPath:          exe,
+		}); err != nil {
 			return err
 		}
-		fmt.Println("服务安装完成")
+		fmt.Println("服务安装完成（已启用 clean + watch 双服务）")
 		return nil
 	case "uninstall":
 		if err := service.Uninstall(); err != nil {

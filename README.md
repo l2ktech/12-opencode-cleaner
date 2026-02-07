@@ -8,7 +8,7 @@
 - `scan`：扫描并输出候选进程
 - `clean`：温和清理候选（`SIGTERM`，可选延迟后 `SIGKILL`）
 - `watch`：内存阈值告警（仅提醒，不重启进程）
-- `service install`：安装自动清理服务
+- `service install`：默认安装并启动两套后台服务（clean + watch）
   - macOS：`launchd`
   - Linux：`systemd --user timer`
 - `service status / uninstall`：查看状态或卸载
@@ -74,9 +74,14 @@ go run ./cmd/oc-cleaner scan --min-age-min 10
 ### macOS（launchd）
 
 ```bash
-./oc-cleaner service install --interval-sec 120 --min-age-min 10
+./oc-cleaner service install --interval-sec 120 --min-age-min 10 --watch-interval-sec 30 --watch-warn-mem-mb 1024
 ./oc-cleaner service status
 ```
+
+默认会同时启动：
+
+- `com.wzy.oc-cleaner.clean`（后台清理）
+- `com.wzy.oc-cleaner.watch`（后台监控告警）
 
 卸载：
 
@@ -87,9 +92,14 @@ go run ./cmd/oc-cleaner scan --min-age-min 10
 ### Ubuntu / Linux（systemd user timer）
 
 ```bash
-./oc-cleaner service install --interval-sec 120 --min-age-min 10
+./oc-cleaner service install --interval-sec 120 --min-age-min 10 --watch-interval-sec 30 --watch-warn-mem-mb 1024
 ./oc-cleaner service status
 ```
+
+默认会同时启动：
+
+- `oc-cleaner-clean.timer`（后台清理）
+- `oc-cleaner-watch.timer`（后台监控告警）
 
 建议额外开启 lingering（使用户退出登录后仍可运行 user service）：
 
@@ -120,7 +130,7 @@ systemctl --user list-timers --all | grep oc-cleaner
 git clone https://github.com/l2ktech/12-opencode-cleaner.git
 cd 12-opencode-cleaner
 go build -o oc-cleaner ./cmd/oc-cleaner
-./oc-cleaner service install --interval-sec 120 --min-age-min 10
+./oc-cleaner service install --interval-sec 120 --min-age-min 10 --watch-interval-sec 30 --watch-warn-mem-mb 1024
 ./oc-cleaner service status
 ```
 
@@ -133,7 +143,8 @@ sudo loginctl enable-linger "$USER"
 然后重启后验证：
 
 ```bash
-systemctl --user status oc-cleaner.timer --no-pager
+systemctl --user status oc-cleaner-clean.timer --no-pager
+systemctl --user status oc-cleaner-watch.timer --no-pager
 systemctl --user list-timers --all | grep oc-cleaner
 ```
 
