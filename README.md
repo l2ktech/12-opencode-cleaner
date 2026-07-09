@@ -1,5 +1,21 @@
 # opencode-cleaner
 
+## Public Portfolio Summary
+
+This repository is a public support entry for AI development workstation hygiene. It provides a conservative cross-platform CLI for scanning and cleaning orphan `opencode` processes, plus watch-mode memory warnings and macOS/Linux service installation paths.
+
+For interviews, use it as a compact example of operational reliability work around AI coding tools: process classification, safe defaults, CLI ergonomics, background service integration, and low-risk automation design.
+
+## Evidence Entry Points
+
+- [`cmd/oc-cleaner`](cmd/oc-cleaner): CLI entry point.
+- [`internal`](internal): process scanning, cleaning, watch, and service logic.
+- README sections `scan`, `clean`, `watch`, and `service install`: public usage surface.
+
+## Public Boundary
+
+This repository should not include private process dumps, user session contents, prompts, tokens, machine hostnames, internal automation credentials, or production logs. Keep examples generic and preserve the conservative default behavior: scan first, terminate only narrow orphan-process candidates, and avoid interrupting active sessions.
+
 跨平台（macOS / Linux）自动清理 `opencode` 孤儿进程的小工具。  
 默认使用“保守策略”：只处理 `PPID=1`、无终端绑定、运行时间超过阈值、且无非本地已建立连接的进程。
 
